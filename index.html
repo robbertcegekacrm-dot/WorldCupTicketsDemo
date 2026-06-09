@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>World Cup Fan Support</title>
+<script src="https://unpkg.com/botframework-directlinejs@0.15.5/dist/directline.js"></script>
 <style>
   :root {
     --pitch: #0a7d3c;
@@ -326,7 +327,7 @@
           <div class="avatar-edit" onclick="document.getElementById('avatarInput').click()" title="Change photo">✎</div>
           <input type="file" id="avatarInput" accept="image/*" style="display:none;">
         </div>
-        <div class="fan-name">Marco van Buuren</div>
+        <div class="fan-name">Marco van Dijk</div>
         <div class="fan-id">Fan ID · NL-4471-882</div>
 
         <div class="stat-rows">
@@ -537,86 +538,109 @@
     }, 700);
   }
 
-  /* ---------- LIVE MODE (Direct Line) ----------
-     Same handshake as the working KYC / WhatsApp demos:
-     1. GET the token endpoint  -> { token, conversationId }
-     2. read the regional Direct Line domain returned with the token
-        (some PVA token responses include it; otherwise fall back to
-        the global Direct Line base)
-     3. open a conversation on that domain, then poll activities
+  /* ---------- LIVE MODE (Direct Line via official library) ----------
+     This mirrors the working KYC / WhatsApp demos exactly:
+       1. fetch the regional CHANNEL SETTINGS from the token endpoint's
+          host to learn the regional Direct Line domain
+       2. fetch the Direct Line TOKEN from the token endpoint
+       3. create a DirectLine connection with BOTH the token AND the
+          regional domain, then subscribe to its activity stream
+     The earlier version failed because it opened a conversation against
+     the GLOBAL directline.botframework.com host, which does not match a
+     regional PVA token — so activities never arrived and the typing dots
+     spun forever.
   ------------------------------------------------------------------- */
-  const GLOBAL_DL_BASE = "https://directline.botframework.com/v3/directline";
-  let directLine = { token: null, conversationId: null, watermark: null, base: GLOBAL_DL_BASE, polling: false, greeted: false };
+  let dl = null;          // DirectLine instance
+  let dlUserId = CONFIG.USER_ID;
+
+  // Regional channel settings endpoint. The host is taken from the token
+  // endpoint so it always points at the right region for this environment.
+  function regionalSettingsUrlFrom(tokenEndpoint) {
+    try {
+      const host = new URL(tokenEndpoint).host;
+      return `https://${host}/powervirtualagents/regionalchannelsettings?api-version=2022-03-01-preview`;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  async function fetchJSON(url, opts) {
+    const r = await fetch(url, opts || {});
+    if (!r.ok) throw new Error(url + ' -> HTTP ' + r.status);
+    return r.json();
+  }
 
   async function startLive() {
     try {
-      // Step 1 — fetch a Direct Line token from the PVA token endpoint
-      const r = await fetch(CONFIG.TOKEN_ENDPOINT);
-      if (!r.ok) throw new Error('Token endpoint returned ' + r.status);
-      const data = await r.json();
-      directLine.token = data.token;
-
-      // PVA token responses can carry a regional conversation already started
-      if (data.conversationId) directLine.conversationId = data.conversationId;
-
-      // Step 2 — open a conversation if we did not get one with the token
-      if (!directLine.conversationId) {
-        const c = await fetch(`${directLine.base}/conversations`, {
-          method: 'POST',
-          headers: { 'Authorization': 'Bearer ' + directLine.token }
-        });
-        const cd = await c.json();
-        directLine.conversationId = cd.conversationId;
-        if (cd.token) directLine.token = cd.token;
-        // honor a regional streamUrl/domain if returned
-        if (cd.streamUrl) {
-          const m = cd.streamUrl.match(/^wss?:\/\/[^/]+\/v3\/directline/i);
-          if (m) directLine.base = m[0].replace(/^ws/i, 'http');
+      // STEP 1 — get the regional Direct Line domain for this environment.
+      let domain = null;
+      const settingsUrl = regionalSettingsUrlFrom(CONFIG.TOKEN_ENDPOINT);
+      if (settingsUrl) {
+        try {
+          const settings = await fetchJSON(settingsUrl);
+          // settings.channelUrlsById.directline e.g. https://europe.directline.botframework.com/
+          if (settings && settings.channelUrlsById && settings.channelUrlsById.directline) {
+            domain = settings.channelUrlsById.directline + 'v3/directline';
+          }
+        } catch (e) {
+          console.warn('Regional settings fetch failed, will use default domain:', e);
         }
       }
 
-      pollLive();
+      // STEP 2 — get the Direct Line token from the token endpoint.
+      const tokenData = await fetchJSON(CONFIG.TOKEN_ENDPOINT, { method: 'GET' });
+      const token = tokenData.token;
+      if (!token) throw new Error('No token returned. Check the schema name and that auth is set to No authentication.');
 
-      // Step 3 — nudge the agent so it fires its greeting topic
-      setTimeout(() => { sendLive(CONFIG.GREETING_TRIGGER, true); }, 800);
+      // STEP 3 — create the DirectLine connection with token (+ regional domain).
+      const opts = { token: token };
+      if (domain) opts.domain = domain;
+      dl = new DirectLine.DirectLine(opts);
+
+      // Incoming activities
+      dl.activity$.subscribe(
+        function (activity) {
+          if (activity.type === 'message' && activity.from && activity.from.id !== dlUserId) {
+            hideTyping();
+            if (activity.text) addMessage(activity.text.replace(/\n/g, '<br>'), 'bot');
+            if (activity.suggestedActions && activity.suggestedActions.actions) {
+              addSuggestions(activity.suggestedActions.actions.map(function (a) { return a.title || a.value; }));
+            }
+          }
+        },
+        function (err) { console.warn('activity stream error', err); }
+      );
+
+      // Connection status: nudge greeting when online, fall back on failure
+      dl.connectionStatus$.subscribe(function (status) {
+        // 0 Uninitialized 1 Connecting 2 Online 3 ExpiredToken 4 FailedToConnect 5 Ended
+        if (status === 2 && !startLive._greeted) {
+          startLive._greeted = true;
+          showTyping();
+          sendLive(CONFIG.GREETING_TRIGGER, true);
+        }
+        if (status === 4) {
+          console.warn('Direct Line failed to connect (status 4).');
+          hideTyping();
+          if (!startLive._greeted) runDemoGreeting();
+        }
+      });
     } catch (e) {
       console.warn('Live connection failed, falling back to demo mode:', e);
       runDemoGreeting();
     }
   }
 
-  async function sendLive(text, silent) {
-    try {
-      await fetch(`${directLine.base}/conversations/${directLine.conversationId}/activities`, {
-        method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + directLine.token, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'message', from: { id: CONFIG.USER_ID, name: CONFIG.USER_NAME }, text })
-      });
-    } catch (e) { console.warn('send failed', e); }
-  }
-
-  async function pollLive() {
-    if (directLine.polling) return;
-    directLine.polling = true;
-    setInterval(async () => {
-      try {
-        const url = `${directLine.base}/conversations/${directLine.conversationId}/activities` +
-          (directLine.watermark ? `?watermark=${directLine.watermark}` : '');
-        const r = await fetch(url, { headers: { 'Authorization': 'Bearer ' + directLine.token } });
-        const data = await r.json();
-        directLine.watermark = data.watermark;
-        (data.activities || []).forEach(a => {
-          if (a.type === 'message' && a.from && a.from.id !== CONFIG.USER_ID) {
-            hideTyping();
-            if (a.text) addMessage(a.text.replace(/\n/g, '<br>'), 'bot');
-            // render suggested actions / quick replies if the agent sends them
-            if (a.suggestedActions && a.suggestedActions.actions) {
-              addSuggestions(a.suggestedActions.actions.map(x => x.title || x.value));
-            }
-          }
-        });
-      } catch (e) { /* keep quiet during the demo */ }
-    }, 1100);
+  function sendLive(text, silent) {
+    if (!dl) return;
+    dl.postActivity({
+      from: { id: dlUserId, name: CONFIG.USER_NAME },
+      type: 'message',
+      text: text
+    }).subscribe(
+      function () {},
+      function (err) { console.warn('post failed', err); }
+    );
   }
 
   const LIVE = !!(CONFIG.TOKEN_ENDPOINT && !CONFIG.FORCE_DEMO);
