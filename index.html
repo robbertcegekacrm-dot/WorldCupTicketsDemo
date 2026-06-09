@@ -1,9 +1,10 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>World Cup Fan Support Chat</title>
+<title>World Cup Fan Support</title>
 <style>
   :root {
     --pitch: #0a7d3c;
@@ -226,14 +227,6 @@
     overflow: hidden;
     min-height: 0;
   }
-  /* Make the embedded Dynamics widget fill the panel */
-  .lcw-region iframe,
-  #Microsoft_Omnichannel_LCWidgetContainer,
-  [id^="lcw"] iframe {
-    width: 100% !important;
-    height: 100% !important;
-    border: none !important;
-  }
   .lcw-placeholder {
     position: absolute;
     inset: 0;
@@ -246,15 +239,14 @@
     color: var(--ink-soft);
     padding: 24px;
   }
-  .lcw-placeholder p { font-size: 15px; font-weight: 600; color: var(--ink); }
-  .lcw-placeholder small { font-size: 12.5px; max-width: 320px; line-height: 1.5; }
-  .lcw-spinner {
-    width: 34px; height: 34px; border-radius: 50%;
-    border: 3px solid var(--line);
-    border-top-color: var(--pitch);
-    animation: spin 0.9s linear infinite;
+  .lcw-placeholder p { font-size: 16px; font-weight: 700; color: var(--ink); }
+  .lcw-placeholder small { font-size: 13px; max-width: 320px; line-height: 1.5; }
+  .lcw-chat-icon {
+    width: 76px; height: 76px; border-radius: 50%;
+    display: grid; place-items: center;
+    background: #eaf6ee; color: var(--pitch);
+    margin-bottom: 4px;
   }
-  @keyframes spin { to { transform: rotate(360deg); } }
 
   @media (max-width: 860px) {
     .shell { grid-template-columns: 1fr; }
@@ -350,35 +342,79 @@
            service representative, and chat-to-voice escalation. -->
       <div class="lcw-region" id="lcwRegion">
         <div class="lcw-placeholder" id="lcwPlaceholder">
-          <div class="lcw-spinner"></div>
-          <p>Connecting you to the Fan Support team…</p>
-          <small id="lcwHint">Loading the live chat experience.</small>
+          <div class="lcw-chat-icon">
+            <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          </div>
+          <p>Need a hand with your tickets?</p>
+          <small id="lcwHint">Tap the chat button in the corner to start a conversation with the Fan Support team.</small>
         </div>
       </div>
     </main>
   </div>
 
 <!-- ============================================================
-     DYNAMICS 365 CONTACT CENTER — LIVE CHAT WIDGET (live snippet)
+     DYNAMICS 365 CONTACT CENTER — LIVE CHAT WIDGET 2.0
      ------------------------------------------------------------
-     This is the real snippet from Copilot Service admin center →
-     Channels → Chat → Chat widget tab. The dock attributes
-     (hide-chat-button, autofill, color-override) make it fill the
-     right-hand panel instead of floating as a bubble.
+     Default launch bubble is left UNTOUCHED (no chatButtonProps) so it
+     always renders. The callback styles ONLY the open window, header,
+     and messages — wider, modern, green, glass-like.
      ============================================================ -->
-<script
-  id="Microsoft_Omnichannel_LCWidget"
-  src="https://oc-cdn-public-eur.azureedge.net/livechatwidget/scripts/LiveChatBootstrapper.js"
-  data-app-id="dca749f5-41c4-4ff0-a8e3-cca5a55904c2"
-  data-lcw-version="prod"
-  data-org-id="11acee64-b317-f111-afc0-000d3ab2a761"
-  data-org-url="https://m-11acee64-b317-f111-afc0-000d3ab2a761.eu.omnichannelengagementhub.com"
-  data-hide-chat-button="true"
-  data-enable-lcw-autofill="true"
-  data-color-override="#0a7d3c"
-  onerror="(function(el){el.parentNode.removeChild(el);var s=document.createElement('script');s.src='https://ocprodpubliceurgs.blob.core.windows.net/livechatwidget/scripts/LiveChatBootstrapper.js';s.setAttribute('id','Microsoft_Omnichannel_LCWidget');s.setAttribute('data-app-id','dca749f5-41c4-4ff0-a8e3-cca5a55904c2');s.setAttribute('data-lcw-version','prod');s.setAttribute('data-org-id','11acee64-b317-f111-afc0-000d3ab2a761');s.setAttribute('data-org-url','https://m-11acee64-b317-f111-afc0-000d3ab2a761.eu.omnichannelengagementhub.com');s.setAttribute('data-hide-chat-button','true');s.setAttribute('data-enable-lcw-autofill','true');s.setAttribute('data-color-override','#0a7d3c');document.body.appendChild(s);})(this);"
-  async>
+<script>
+  function lcwConfig() {
+    return {
+      // The open chat window: wide, modern, glass-like.
+      styleProps: {
+        generalStyles: {
+          width: "820px",
+          height: "780px",
+          bottom: "20px",
+          right: "20px",
+          borderRadius: "20px",
+          borderWidth: "1px",
+          borderStyle: "solid",
+          borderColor: "rgba(255,255,255,0.4)",
+          boxShadow: "0 20px 60px rgba(14,23,38,.28)",
+          backgroundColor: "rgba(255,255,255,0.78)",
+          backdropFilter: "blur(20px) saturate(160%)",
+          WebkitBackdropFilter: "blur(20px) saturate(160%)",
+          overflow: "hidden"
+        }
+      },
+      // Slim translucent green header, title hidden.
+      headerProps: {
+        controlProps: {
+          hideTitle: true
+        },
+        styleProps: {
+          generalStyleProps: {
+            background: "rgba(10,125,60,0.9)",
+            height: "40px",
+            borderTopLeftRadius: "20px",
+            borderTopRightRadius: "20px"
+          }
+        }
+      },
+      // Green message bubbles on a translucent canvas.
+      webChatContainerProps: {
+        webChatStyles: {
+          backgroundColor: "transparent",
+          bubbleBackground: "rgba(255,255,255,0.92)",
+          bubbleTextColor: "#0e1726",
+          bubbleFromUserBackground: "#0a7d3c",
+          bubbleFromUserTextColor: "#ffffff",
+          bubbleBorderRadius: 16,
+          bubbleFromUserBorderRadius: 16,
+          sendBoxButtonColor: "#0a7d3c",
+          sendBoxBackground: "rgba(255,255,255,0.6)",
+          accent: "#0a7d3c",
+          primaryFont: "'Segoe UI', system-ui, -apple-system, sans-serif"
+        }
+      }
+    };
+  }
 </script>
+
+<script id="Microsoft_Omnichannel_LCWidget" src="https://oc-cdn-public-eur.azureedge.net/livechatwidget/scripts/LiveChatBootstrapper.js" onerror="(function(el){el.parentNode.removeChild(el);var s=document.createElement('script');s.src='https://ocprodpubliceurgs.blob.core.windows.net/livechatwidget/scripts/LiveChatBootstrapper.js';s.setAttribute('id', 'Microsoft_Omnichannel_LCWidget');s.setAttribute('data-app-id', 'dca749f5-41c4-4ff0-a8e3-cca5a55904c2');s.setAttribute('data-lcw-version', 'prod');s.setAttribute('data-org-id', '11acee64-b317-f111-afc0-000d3ab2a761');s.setAttribute('data-org-url', 'https://m-11acee64-b317-f111-afc0-000d3ab2a761.eu.omnichannelengagementhub.com');s.setAttribute('data-customization-callback','lcwConfig');s.setAttribute('v2','');document.body.appendChild(s);})(this);" data-app-id="dca749f5-41c4-4ff0-a8e3-cca5a55904c2" data-lcw-version="prod" data-org-id="11acee64-b317-f111-afc0-000d3ab2a761" data-org-url="https://m-11acee64-b317-f111-afc0-000d3ab2a761.eu.omnichannelengagementhub.com" data-customization-callback="lcwConfig" v2 async></script>
 
 <script>
   /* ---------- Avatar upload ---------- */
@@ -394,60 +430,7 @@
     };
     reader.readAsDataURL(file);
   });
-
-  /* ---------- Live chat widget mount + auto-open ----------
-     The launch button is hidden (data-hide-chat-button), so we open
-     the chat ourselves once the SDK is ready, then dock the widget's
-     iframe into our right-hand panel and hide the placeholder.
-  ------------------------------------------------------------------- */
-  (function () {
-    const region = document.getElementById('lcwRegion');
-    const placeholder = document.getElementById('lcwPlaceholder');
-    const hint = document.getElementById('lcwHint');
-    let mounted = false;
-    let opened = false;
-
-    function openChat() {
-      if (opened) return;
-      try {
-        const sdk = window.Microsoft &&
-          window.Microsoft.Omnichannel &&
-          window.Microsoft.Omnichannel.LiveChatWidget &&
-          window.Microsoft.Omnichannel.LiveChatWidget.SDK;
-        if (sdk && typeof sdk.startChat === 'function') {
-          sdk.startChat();
-          opened = true;
-        }
-      } catch (e) { /* SDK not ready yet */ }
-    }
-
-    function dock() {
-      const container =
-        document.getElementById('Microsoft_Omnichannel_LCWidgetContainer') ||
-        document.querySelector('[id^="Microsoft_Omnichannel_LCWidget"][id$="Container"]') ||
-        document.querySelector('[data-id="lcw-components"]') ||
-        document.querySelector('iframe[id^="lcw"], iframe[title*="chat" i]');
-      if (container) {
-        if (container.parentElement !== region) region.appendChild(container);
-        if (placeholder) placeholder.style.display = 'none';
-        mounted = true;
-      }
-    }
-
-    const poll = setInterval(function () {
-      openChat();
-      dock();
-      if (mounted && opened) clearInterval(poll);
-    }, 600);
-
-    setTimeout(function () {
-      if (!mounted && hint) {
-        hint.textContent = 'Still connecting. Confirm the chat channel is published with a workstream, and host this page (not opened from disk) so the widget can load.';
-      }
-    }, 14000);
-
-    window.addEventListener('load', function () { openChat(); dock(); });
-  })();
 </script>
 </body>
 </html>
+
